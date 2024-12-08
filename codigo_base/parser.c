@@ -1,10 +1,10 @@
 #include "parser.h"
-
+#include <dirent.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <stdio.h>
 #include "constants.h"
 
 static int read_string(int fd, char *buffer, size_t max) {
@@ -82,90 +82,60 @@ static void cleanup(int fd) {
     ;
 }
 
-enum Command get_next(int fd) {
-  char buf[16];
-  if (read(fd, buf, 1) != 1) {
-    return EOC;
-  }
 
-  switch (buf[0]) {
-    case 'W':
-      if (read(fd, buf + 1, 4) != 4 || strncmp(buf, "WAIT ", 5) != 0) {
-        if (read(fd, buf + 5, 1) != 1 || strncmp(buf, "WRITE ", 6) != 0) {
-          cleanup(fd);
-          return CMD_INVALID;
-        }
-        return CMD_WRITE;
-      }
+enum Command get_next(const char *line) {
+    if (line == NULL || *line == '\0') {
+        return CMD_EMPTY;
+    }
 
-      return CMD_WAIT;
+    switch (line[0]) {
+        case 'W':
+            if (strncmp(line, "WAIT ", 5) == 0) {
+                return CMD_WAIT;
+            } else if (strncmp(line, "WRITE ", 6) == 0) {
+                return CMD_WRITE;
+            }
+            return CMD_INVALID;
 
-    case 'R':
-      if (read(fd, buf + 1, 4) != 4 || strncmp(buf, "READ ", 5) != 0) {
-        cleanup(fd);
-        return CMD_INVALID;
-      }
+        case 'R':
+            if (strncmp(line, "READ ", 5) == 0) {
+                return CMD_READ;
+            }
+            return CMD_INVALID;
 
-      return CMD_READ;
+        case 'D':
+            if (strncmp(line, "DELETE ", 7) == 0) {
+                return CMD_DELETE;
+            }
+            return CMD_INVALID;
 
-    case 'D':
-      if (read(fd, buf + 1, 6) != 6 || strncmp(buf, "DELETE ", 7) != 0) {
-        cleanup(fd);
-        return CMD_INVALID;
-      }
+        case 'S':
+            if (strncmp(line, "SHOW", 4) == 0 && (line[4] == '\0' || line[4] == '\n')) {
+                return CMD_SHOW;
+            }
+            return CMD_INVALID;
 
-      return CMD_DELETE;
+        case 'B':
+            if (strncmp(line, "BACKUP", 6) == 0 && (line[6] == '\0' || line[6] == '\n')) {
+                return CMD_BACKUP;
+            }
+            return CMD_INVALID;
 
-    case 'S':
-      if (read(fd, buf + 1, 3) != 3 || strncmp(buf, "SHOW", 4) != 0) {
-        cleanup(fd);
-        return CMD_INVALID;
-      }
+        case 'H':
+            if (strncmp(line, "HELP", 4) == 0 && (line[4] == '\0' || line[4] == '\n')) {
+                return CMD_HELP;
+            }
+            return CMD_INVALID;
 
-      if (read(fd, buf + 4, 1) != 0 && buf[4] != '\n') {
-        cleanup(fd);
-        return CMD_INVALID;
-      }
+        case '#':
+            return CMD_EMPTY;
 
-      return CMD_SHOW;
+        case '\n':
+            return CMD_EMPTY;
 
-    case 'B':
-      if (read(fd, buf + 1, 5) != 5 || strncmp(buf, "BACKUP", 6) != 0) {
-        cleanup(fd);
-        return CMD_INVALID;
-      }
-
-      if (read(fd, buf + 6, 1) != 0 && buf[6] != '\n') {
-        cleanup(fd);
-        return CMD_INVALID;
-      }
-
-      return CMD_BACKUP;
-
-    case 'H':
-      if (read(fd, buf + 1, 3) != 3 || strncmp(buf, "HELP", 4) != 0) {
-        cleanup(fd);
-        return CMD_INVALID;
-      }
-
-      if (read(fd, buf + 4, 1) != 0 && buf[4] != '\n') {
-        cleanup(fd);
-        return CMD_INVALID;
-      }
-
-      return CMD_HELP;
-
-    case '#':
-      cleanup(fd);
-      return CMD_EMPTY;
-
-    case '\n':
-      return CMD_EMPTY;
-
-    default:
-      cleanup(fd);
-      return CMD_INVALID;
-  }
+        default:
+            return CMD_INVALID;
+    }
 }
 
 int parse_pair(int fd, char *key, char *value) {
@@ -186,7 +156,8 @@ size_t parse_write(int fd, char keys[][MAX_STRING_SIZE], char values[][MAX_STRIN
   char ch;
 
   if (read(fd, &ch, 1) != 1 || ch != '[') {
-    cleanup(fd);
+    printf("Expected '[', but got '%c'\n", ch);
+    //cleanup(fd);
     return 0;
   }
 
@@ -294,3 +265,4 @@ int parse_wait(int fd, unsigned int *delay, unsigned int *thread_id) {
     return -1;
   }
 }
+
