@@ -9,11 +9,12 @@
 #include "operations.h"
 #include <string.h>
 
-///home/kali/Desktop/Projeto-So/tests-public/jobs/
+///home/kali/Desktop/Projeto-So/tests-public/jobs 2
+///home/kali/Desktop/Projeto-So/codigo_base/tests-public/jobs 2
+///home/kali/Desktop/Projeto-So/jobs/ 2
 
 
 int main() {
-    
     
     if (kvs_init()) {
         fprintf(stderr, "Failed to initialize KVS\n");
@@ -32,10 +33,19 @@ int main() {
 
     buffer[bytesReadD] = '\0';
     buffer[strcspn(buffer, "\n")] = '\0';
+    char *until_space = strrchr(buffer, ' ');
+    
+    if (until_space == NULL){
+        return 1;
+    }
+    *until_space = '\0';
+    int MAX_NUMBER_BACKUPS = atoi(until_space + 1);
+    
+    MAX_NUMBER_BACKUPS ++;
 
     dir = opendir(buffer);
     if (dir == NULL) {
-        perror("opendir");
+        fprintf(stderr, "Opendir failed\n");
         return 1;
     }
     //Find the paths for all of the job files and put it in the array
@@ -44,30 +54,31 @@ int main() {
     if (Job_paths == NULL) {
         return 1;
     }
+
     char file_out[512];
     for(int j = 0; j < num_jobs; j++){
         char keys[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
         char values[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
         unsigned int delay;
         size_t num_pairs;
-        
-
+    
         int fd = open(Job_paths[j], O_RDONLY);
         if (fd == -1) {
             fprintf(stderr, "Failed to open File\n");
             continue;
         }
         char *file_name = get_file_name(Job_paths[j]);
-        
-        snprintf(file_out, sizeof(file_out), "%s.out", file_name);
+        snprintf(file_out, sizeof(file_out), "%s/%s.out", buffer, file_name);
         free(file_name);
-        int fd_out = open(file_out, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        int fd_out = open(file_out, O_WRONLY | O_CREAT |O_TRUNC, 0644);
         if (fd_out == -1) {
             fprintf(stderr, "Failed to Create File\n");
+            close(fd);
             continue;
         }
             while(1){
                 enum Command cmd = get_next(fd);
+                
                 if (cmd == EOC) {
                     break;
                 }
