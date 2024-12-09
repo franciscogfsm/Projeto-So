@@ -1,6 +1,6 @@
 #ifndef KVS_PARSER_H
 #define KVS_PARSER_H
-
+#include <dirent.h>
 #include <stddef.h>
 #include "constants.h"
 
@@ -45,5 +45,16 @@ size_t parse_read_delete(int fd, char keys[][MAX_STRING_SIZE], size_t max_keys, 
 /// @param thread_id Pointer to the variable to store the thread ID in. May not be set.
 /// @return 0 if no thread was specified, 1 if a thread was specified, -1 on error.
 int parse_wait(int fd, unsigned int *delay, unsigned int *thread_id);
+
+
+
+
+int compare_job_paths(const void *a, const void *b);
+void free_job_paths(char **Job_paths, int num_jobs);
+char** find_jobs(DIR *dir, const char *buffer, int *num_jobs);
+char* get_file_name(const char *full_path);
+
+
+
 
 #endif  // KVS_PARSER_H
