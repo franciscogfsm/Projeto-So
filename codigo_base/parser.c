@@ -1,10 +1,10 @@
 #include "parser.h"
-
+#include <dirent.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <stdio.h>
 #include "constants.h"
 
 static int read_string(int fd, char *buffer, size_t max) {
@@ -293,4 +293,77 @@ int parse_wait(int fd, unsigned int *delay, unsigned int *thread_id) {
     cleanup(fd);
     return -1;
   }
+}
+
+
+
+char** find_jobs(DIR *dir, const char *buffer, int *num_jobs) {
+    struct dirent *entry;
+    int i = 0;
+    int size = 10;
+    char **Job_paths = malloc((size_t)size * sizeof(char *));
+    if (Job_paths == NULL) {
+        fprintf(stderr, "Bad malloc\n");
+        return NULL;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        char *p_dot = strrchr(entry->d_name, '.');
+        if (p_dot && strcmp(p_dot, ".job") == 0) {
+            char file_path[512];
+            snprintf(file_path, sizeof(file_path), "%s/%s", buffer, entry->d_name);
+            Job_paths[i] = strdup(file_path);
+            if (Job_paths[i] == NULL) {
+                fprintf(stderr, "Bad strdup\n");
+                free_job_paths(Job_paths, i);
+                return NULL;
+            }
+            i++;
+            //INFO: Realloc SIZE if needed
+            if (i >= size - 1) {
+                size *= 2;
+                char **temp = realloc(Job_paths, (size_t)size * sizeof(char *));
+                if (temp == NULL) {
+                    free_job_paths(Job_paths, i);
+                    return NULL;
+                }
+                Job_paths = temp;
+            }
+        }
+    }
+    Job_paths[i] = NULL;
+    *num_jobs = i;
+    qsort(Job_paths, (size_t)i, sizeof(char *), compare_job_paths);
+    return Job_paths;
+}
+
+
+int compare_job_paths(const void *a, const void *b) {
+    const char **path_a = (const char **)a;
+    const char **path_b = (const char **)b;
+    return strcmp(*path_a, *path_b);
+}
+
+void free_job_paths(char **Job_paths, int num_jobs) {
+    for (int j = 0; j < num_jobs; j++) {
+        free(Job_paths[j]);
+    }
+    free(Job_paths);
+}
+
+
+char* get_file_name(const char *full_path) {
+    char *file_name = strrchr(full_path, '/');
+    if (file_name == NULL) {
+        file_name = strdup(full_path);
+    } else {
+        file_name = strdup(file_name + 1);
+    }
+
+    char *dot = strrchr(file_name, '.');
+    if (dot != NULL) {
+        *dot = '\0';
+    }
+
+    return file_name;
 }
