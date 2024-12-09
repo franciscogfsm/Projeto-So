@@ -306,11 +306,11 @@ char** find_jobs(DIR *dir, const char *buffer, int *num_jobs) {
         fprintf(stderr, "Bad malloc\n");
         return NULL;
     }
-
+    char file_path[512];
     while ((entry = readdir(dir)) != NULL) {
         char *p_dot = strrchr(entry->d_name, '.');
         if (p_dot && strcmp(p_dot, ".job") == 0) {
-            char file_path[512];
+            
             snprintf(file_path, sizeof(file_path), "%s/%s", buffer, entry->d_name);
             Job_paths[i] = strdup(file_path);
             if (Job_paths[i] == NULL) {
