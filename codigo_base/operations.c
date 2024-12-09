@@ -2,9 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
+#include <unistd.h>
 #include "kvs.h"
 #include "constants.h"
+#include <fcntl.h>
 
 static struct HashTable* kvs_table = NULL;
 
@@ -50,28 +51,29 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE], char values[][MAX_
 
   return 0;
 }
-
-int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE]) {
+int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd_out) {
   if (kvs_table == NULL) {
     fprintf(stderr, "KVS state must be initialized\n");
     return 1;
   }
 
-  printf("[");
+  write(fd_out, "[", 1);
   for (size_t i = 0; i < num_pairs; i++) {
     char* result = read_pair(kvs_table, keys[i]);
+    char buffer[256];
     if (result == NULL) {
-      printf("(%s,KVSERROR)", keys[i]);
+      snprintf(buffer, sizeof(buffer), "(%s,KVSERROR)", keys[i]);
     } else {
-      printf("(%s,%s)", keys[i], result);
+      snprintf(buffer, sizeof(buffer), "(%s,%s)", keys[i], result);
     }
+    write(fd_out, buffer, strlen(buffer));
     free(result);
   }
-  printf("]\n");
+  write(fd_out, "]\n", 2);
   return 0;
 }
 
-int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE]) {
+int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd_out) {
   if (kvs_table == NULL) {
     fprintf(stderr, "KVS state must be initialized\n");
     return 1;
@@ -81,24 +83,32 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE]) {
   for (size_t i = 0; i < num_pairs; i++) {
     if (delete_pair(kvs_table, keys[i]) != 0) {
       if (!aux) {
-        printf("[");
+        write(fd_out, "[", 1);
         aux = 1;
       }
-      printf("(%s,KVSMISSING)", keys[i]);
+      char buffer[512];
+      snprintf(buffer, sizeof(buffer), "(%s,KVSMISSING)", keys[i]);
+      write(fd_out, buffer, strlen(buffer));
     }
   }
   if (aux) {
-    printf("]\n");
+    write(fd_out, "]\n", 2);
   }
-
   return 0;
 }
 
-void kvs_show() {
+void kvs_show(int fd_out) {
   for (int i = 0; i < TABLE_SIZE; i++) {
     KeyNode *keyNode = kvs_table->table[i];
     while (keyNode != NULL) {
-      printf("(%s, %s)\n", keyNode->key, keyNode->value);
+      char buffer[256];
+      snprintf(buffer, sizeof(buffer), "(%s, %s)\n", keyNode->key, keyNode->value);
+      ssize_t bytes_written = write(fd_out, buffer, strlen(buffer));
+      if (bytes_written == -1) {
+        perror("write");
+        close(fd_out);
+        return;
+      }
       keyNode = keyNode->next; // Move to the next node
     }
   }
