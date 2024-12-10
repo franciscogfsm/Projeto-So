@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <sys/stat.h>
 #include "constants.h"
 
 static int read_string(int fd, char *buffer, size_t max) {
@@ -307,28 +308,31 @@ char** find_jobs(DIR *dir, const char *buffer, int *num_jobs) {
         return NULL;
     }
     char file_path[512];
+    struct stat path_stat;
     while ((entry = readdir(dir)) != NULL) {
         char *p_dot = strrchr(entry->d_name, '.');
+
         if (p_dot && strcmp(p_dot, ".job") == 0) {
-            
-            snprintf(file_path, sizeof(file_path), "%s/%s", buffer, entry->d_name);
-            Job_paths[i] = strdup(file_path);
-            if (Job_paths[i] == NULL) {
-                fprintf(stderr, "Bad strdup\n");
-                free_job_paths(Job_paths, i);
-                return NULL;
-            }
-            i++;
-            //INFO: Realloc SIZE if needed
-            if (i >= size - 1) {
-                size *= 2;
-                char **temp = realloc(Job_paths, (size_t)size * sizeof(char *));
-                if (temp == NULL) {
-                    free_job_paths(Job_paths, i);
-                    return NULL;
-                }
-                Job_paths = temp;
-            }
+          snprintf(file_path, sizeof(file_path), "%s/%s", buffer, entry->d_name);
+          if (stat(file_path, &path_stat) == 0 && !S_ISDIR(path_stat.st_mode)) {
+              Job_paths[i] = strdup(file_path);
+              if (Job_paths[i] == NULL) {
+                  fprintf(stderr, "Bad strdup\n");
+                  free_job_paths(Job_paths, i);
+                  return NULL;
+              }
+              i++;
+              // Realloc SIZE if needed
+              if (i >= size - 1) {
+                  size *= 2;
+                  char **temp = realloc(Job_paths, (size_t)size * sizeof(char *));
+                  if (temp == NULL) {
+                      free_job_paths(Job_paths, i);
+                      return NULL;
+                  }
+                  Job_paths = temp;
+              }
+          }
         }
     }
     Job_paths[i] = NULL;
