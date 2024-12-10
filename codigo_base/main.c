@@ -8,42 +8,29 @@
 #include <fcntl.h>
 #include "operations.h"
 #include <string.h>
-
+#include <sys/wait.h>
 ///home/kali/Desktop/Projeto-So/tests-public/jobs 2
 ///home/kali/Desktop/Projeto-So/codigo_base/tests-public/jobs 2
 ///home/kali/Desktop/Projeto-So/jobs/ 2
 
 
-int main() {
+int main(int argc, char *argv[]) {
+    
+    if (argc != 4) {
+        fprintf(stderr, "Wrong usage");
+        return 1;
+    }
     
     if (kvs_init()) {
         fprintf(stderr, "Failed to initialize KVS\n");
         return 1;
     }
     
-    char buffer[MAX_WRITE_SIZE]; // Buffer for the directory name
-    ssize_t bytesReadD;
-    DIR *dir;
 
-    bytesReadD = read(STDIN_FILENO, buffer, sizeof(buffer) - 1);
-    if (bytesReadD == -1) {
-        fprintf(stderr, "Failed to read from stdin Input\n");
-        return 1;
-    }
+    const char *buffer = argv[1];
+    int MAX_NUMBER_BACKUPS = atoi(argv[2]);
 
-    buffer[bytesReadD] = '\0';
-    buffer[strcspn(buffer, "\n")] = '\0';
-    char *until_space = strrchr(buffer, ' ');
-    
-    if (until_space == NULL){
-        return 1;
-    }
-    *until_space = '\0';
-    int MAX_NUMBER_BACKUPS = atoi(until_space + 1);
-    
-    MAX_NUMBER_BACKUPS ++;
-
-    dir = opendir(buffer);
+    DIR *dir = opendir(buffer);
     if (dir == NULL) {
         fprintf(stderr, "Opendir failed\n");
         return 1;
@@ -54,9 +41,11 @@ int main() {
     if (Job_paths == NULL) {
         return 1;
     }
-
+    
+    int active_backups = 0;
     char file_out[512];
     for(int j = 0; j < num_jobs; j++){
+        int Number_bck_file=0;
         char keys[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
         char values[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
         unsigned int delay;
@@ -102,7 +91,7 @@ int main() {
                         if (kvs_read(num_pairs,keys,fd_out)) {
                             fprintf(stderr, "Failed to read pair\n");
                         }
-                        break;
+                        break;                            
 
                     case CMD_DELETE:
 
@@ -126,13 +115,20 @@ int main() {
                             continue;
                         }
                         if (delay > 0) {
-                            printf("Waiting...\n");
+                            write(fd_out, "Waiting...\n", sizeof("Waiting...\n") - 1);
                             kvs_wait(delay);
                         }
                         break;
 
                     case CMD_BACKUP:
-                        if (kvs_backup()) {
+                        active_backups++;
+                        if (active_backups > MAX_NUMBER_BACKUPS){
+                            printf("Maximum number of backups reached. Waiting...\n");
+                            wait(NULL);
+                            active_backups--;
+                        }
+                        Number_bck_file++;
+                        if (kvs_backup(Job_paths[j], buffer, Number_bck_file)) {
                             fprintf(stderr, "Failed to perform backup.\n");
                         }
                         break;
