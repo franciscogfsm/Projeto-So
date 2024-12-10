@@ -155,13 +155,6 @@ int kvs_backup(const char *full_path, const char *buffer, int file_bcks) {
 }
 
 
-
-
-
-
-
-
-
 void kvs_wait(unsigned int delay_ms) {
   struct timespec delay = delay_to_timespec(delay_ms);
   nanosleep(&delay, NULL);
