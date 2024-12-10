@@ -6,6 +6,7 @@
 #include "kvs.h"
 #include "constants.h"
 #include <fcntl.h>
+#include "parser.h"
 
 static struct HashTable* kvs_table = NULL;
 
@@ -80,13 +81,13 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd_out) {
   }
   int aux = 0;
 
+  char buffer[MAX_WRITE_SIZE];
   for (size_t i = 0; i < num_pairs; i++) {
     if (delete_pair(kvs_table, keys[i]) != 0) {
       if (!aux) {
         write(fd_out, "[", 1);
         aux = 1;
       }
-      char buffer[512];
       snprintf(buffer, sizeof(buffer), "(%s,KVSMISSING)", keys[i]);
       write(fd_out, buffer, strlen(buffer));
     }
@@ -114,9 +115,52 @@ void kvs_show(int fd_out) {
   }
 }
 
-int kvs_backup() {
-  return 0;
+void format_Char(char *backup_filename, size_t size, const char *full_path, const char *buffer, int file_bcks) {
+    char *input_file_name = get_file_name(full_path);
+    
+    // Remove the .job extension if it exists
+    char file_name_no_ext[256];
+    strncpy(file_name_no_ext, input_file_name, sizeof(file_name_no_ext));
+    char *dot = strrchr(file_name_no_ext, '.');
+    if (dot && !strcmp(dot, ".job")) {
+        *dot = '\0';
+    }
+
+    snprintf(backup_filename, size, "%s/%s-%d.bck", buffer, file_name_no_ext, file_bcks);
+    free(input_file_name);
 }
+
+int kvs_backup(const char *full_path, const char *buffer, int file_bcks) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Child process
+        char backup_filename[256];
+        format_Char(backup_filename, sizeof(backup_filename), full_path, buffer, file_bcks);
+        int fd = open(backup_filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd == -1) {
+            perror("open");
+            return -1;
+        }
+        kvs_show(fd);
+        close(fd);
+        exit(0);
+    } else if (pid > 0) {
+        // Parent process
+        return 0;
+    } else {
+        // Fork failed
+        perror("fork");
+        return -1;
+    }
+}
+
+
+
+
+
+
+
+
 
 void kvs_wait(unsigned int delay_ms) {
   struct timespec delay = delay_to_timespec(delay_ms);
