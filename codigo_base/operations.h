@@ -49,4 +49,10 @@ void kvs_wait_backup();
 /// @param delay_us Delay in milliseconds.
 void kvs_wait(unsigned int delay_ms);
 
+
+void line_locker(size_t num_pairs,char keys[][MAX_STRING_SIZE]);
+void line_unlocker(size_t num_pairs,char keys[][MAX_STRING_SIZE]);
+int compare_keys(const void *a, const void *b);
+
+
 #endif  // KVS_OPERATIONS_H

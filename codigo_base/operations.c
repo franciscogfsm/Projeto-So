@@ -38,6 +38,22 @@ int kvs_terminate() {
   return 0;
 }
 
+
+void line_locker(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
+  for (size_t i = 0; i < num_pairs; i++) {
+    int index = hash(keys[i]);
+    pthread_mutex_lock(&kvs_table->locks[index]);
+  }
+}
+void line_unlocker(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
+  for (size_t i = 0; i < num_pairs; i++) {
+    int index = hash(keys[i]);
+    pthread_mutex_unlock(&kvs_table->locks[index]);
+  }
+}
+
+
+
 int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE], char values[][MAX_STRING_SIZE]) {
   if (kvs_table == NULL) {
     fprintf(stderr, "KVS state must be initialized\n");
@@ -52,12 +68,21 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE], char values[][MAX_
 
   return 0;
 }
+
+int compare_keys(const void *a, const void *b) {
+    const char *key_a = (const char *)a;
+    const char *key_b = (const char *)b;
+    return strcmp(key_a, key_b);
+}
+
 int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd_out) {
   if (kvs_table == NULL) {
     fprintf(stderr, "KVS state must be initialized\n");
     return 1;
   }
-
+  
+  qsort(keys, num_pairs, sizeof(keys[0]), compare_keys);
+  
   write(fd_out, "[", 1);
   for (size_t i = 0; i < num_pairs; i++) {
     char* result = read_pair(kvs_table, keys[i]);
@@ -73,6 +98,7 @@ int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd_out) {
   write(fd_out, "]\n", 2);
   return 0;
 }
+
 
 int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd_out) {
   if (kvs_table == NULL) {
@@ -159,3 +185,10 @@ void kvs_wait(unsigned int delay_ms) {
   struct timespec delay = delay_to_timespec(delay_ms);
   nanosleep(&delay, NULL);
 }
+
+
+
+
+
+
+

@@ -4,6 +4,7 @@
 #define TABLE_SIZE 26
 
 #include <stddef.h>
+#include <pthread.h>
 
 typedef struct KeyNode {
     char *key;
@@ -13,11 +14,16 @@ typedef struct KeyNode {
 
 typedef struct HashTable {
     KeyNode *table[TABLE_SIZE];
+    pthread_mutex_t locks[TABLE_SIZE];
 } HashTable;
 
 /// Creates a new event hash table.
 /// @return Newly created hash table, NULL on failure
 struct HashTable *create_hash_table();
+
+
+int hash(const char *key);
+
 
 /// Appends a new key value pair to the hash table.
 /// @param ht Hash table to be modified.
