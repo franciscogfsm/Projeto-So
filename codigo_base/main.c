@@ -48,6 +48,7 @@ void *job_working(void *args){
         unsigned int delay;
         size_t num_pairs;
     
+
         int fd = open(j_args -> Job_paths[job_index], O_RDONLY);
         if (fd == -1) {
             fprintf(stderr, "Failed to open File\n");
@@ -71,6 +72,9 @@ void *job_working(void *args){
             }
             switch (cmd) {
                 case CMD_WRITE:
+                    // É bloqueada a tabela inteira antes de se bloquear apenas as linhas necessárias,
+                    // para não correr o risco de deadlocks.
+                    // Acontece este procedimento para o read, delete, show e backup.
                     pthread_rwlock_wrlock(j_args->table_lock);
                     num_pairs = parse_write(fd, keys, values, MAX_WRITE_SIZE, MAX_STRING_SIZE);
                     if (num_pairs == 0) {
@@ -137,6 +141,9 @@ void *job_working(void *args){
                     break;
 
                 case CMD_BACKUP:
+                    // Se o counter for maior que MAX_BACKUPS (acontece bastantes vezes porque é sempre incrementado), 
+                    // ou um dos processos filhos já acabou e baixa o contador logo, 
+                    // ou espera por um dos processos filhos.
                     (*(j_args->active_backups))++;
                     if (*(j_args -> active_backups) > j_args -> MAX_BACKUPS){
                         wait(NULL);
@@ -145,6 +152,7 @@ void *job_working(void *args){
                     pthread_rwlock_rdlock(j_args->table_lock);
                     if (kvs_backup(j_args -> Job_paths[job_index], j_args -> buffer, Number_bck_file)) {
                         fprintf(stderr, "Failed to perform backup.\n");
+                        (*(j_args->active_backups))--;
                     } else{
                         Number_bck_file++;
                     }
@@ -198,7 +206,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-
+    
     const char *buffer = argv[1];
     int MAX_BACKUPS = atoi(argv[2]);
     int MAX_THREADS = atoi(argv[3]);
@@ -207,14 +215,17 @@ int main(int argc, char *argv[]) {
     DIR *dir = opendir(buffer);
     if (dir == NULL) {
         fprintf(stderr, "Opendir failed\n");
+        kvs_terminate();
         return 1;
     }
     //Find the paths for all of the job files and put it in the array
     int num_jobs;
     char **Job_paths = find_jobs(dir, buffer, &num_jobs);
     if (Job_paths == NULL) {
+        kvs_terminate();
         return 1;
     }
+
     if (MAX_THREADS> num_jobs){
         MAX_THREADS = num_jobs;
     }
@@ -243,6 +254,11 @@ int main(int argc, char *argv[]) {
         int ret = pthread_create(&threads[i], NULL, job_working, &args);
         if (ret != 0) {
             fprintf(stderr, "Failed to create thread %d\n", i);
+            closedir(dir);
+            free_job_paths(Job_paths, num_jobs);
+            pthread_rwlock_destroy(&table_lock);
+            pthread_mutex_destroy(&mutex_jobs);
+            kvs_terminate();
         }
     }
     
@@ -250,6 +266,10 @@ int main(int argc, char *argv[]) {
         int ret = pthread_join(threads[i], NULL);
         if (ret != 0) {
             fprintf(stderr, "Failed to join thread %d\n", i);
+            free_job_paths(Job_paths, num_jobs);
+            pthread_rwlock_destroy(&table_lock);
+            pthread_mutex_destroy(&mutex_jobs);
+            kvs_terminate();
         }
     }
 

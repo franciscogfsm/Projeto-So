@@ -312,8 +312,10 @@ char** find_jobs(DIR *dir, const char *buffer, int *num_jobs) {
     while ((entry = readdir(dir)) != NULL) {
         char *p_dot = strrchr(entry->d_name, '.');
 
+        // Check if the file has a ".job" extension
         if (p_dot && strcmp(p_dot, ".job") == 0) {
           snprintf(file_path, sizeof(file_path), "%s/%s", buffer, entry->d_name);
+
           if (stat(file_path, &path_stat) == 0 && !S_ISDIR(path_stat.st_mode)) {
               Job_paths[i] = strdup(file_path);
               if (Job_paths[i] == NULL) {
@@ -321,8 +323,9 @@ char** find_jobs(DIR *dir, const char *buffer, int *num_jobs) {
                   free_job_paths(Job_paths, i);
                   return NULL;
               }
+
               i++;
-              // Realloc SIZE if needed
+              // Realloc SIZE, doubling the size whenever necessary
               if (i >= size - 1) {
                   size *= 2;
                   char **temp = realloc(Job_paths, (size_t)size * sizeof(char *));
