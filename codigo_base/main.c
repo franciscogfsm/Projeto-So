@@ -223,8 +223,8 @@ int main(int argc, char *argv[]) {
 
     pthread_rwlock_t table_lock;
     pthread_rwlock_init(&table_lock, NULL);
-
-    pthread_mutex_t mutex_jobs = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_t mutex_jobs;
+    pthread_mutex_init(&mutex_jobs, NULL);
     int current_job = 0;
     int active_backups = 0;
     pthread_t threads[MAX_THREADS];
@@ -254,9 +254,13 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // esperar que todos os processos filhos acabem
+    while (wait(NULL) > 0);
+
     closedir(dir);
     free_job_paths(Job_paths, num_jobs);
-    kvs_terminate();
     pthread_rwlock_destroy(&table_lock);
+    pthread_mutex_destroy(&mutex_jobs);
+    kvs_terminate();
     return 0;
 }

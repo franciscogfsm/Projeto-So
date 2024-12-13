@@ -1,5 +1,6 @@
 #include "kvs.h"
 #include "string.h"
+#include <stdio.h>
 
 #include <stdlib.h>
 #include <ctype.h>
@@ -23,10 +24,17 @@ struct HashTable* create_hash_table() {
   HashTable *ht = malloc(sizeof(HashTable));
   if (!ht) return NULL;
   for (int i = 0; i < TABLE_SIZE; i++) {
-      ht->table[i] = NULL;
-      pthread_rwlock_init(&ht->locks[i], NULL);
+    ht->table[i] = NULL;
+    if (pthread_rwlock_init(&ht->locks[i], NULL) != 0) {
+      fprintf(stderr, "Failed to initialize rwlock for bucket %d\n", i);
+      for (int j = 0; j < i; j++) {
+        pthread_rwlock_destroy(&ht->locks[j]);
+      }
+      free(ht);
+      return NULL;
+    }
   }
-  return ht;
+    return ht;
 }
 
 int write_pair(HashTable *ht, const char *key, const char *value) {
@@ -99,6 +107,7 @@ int delete_pair(HashTable *ht, const char *key) {
 void free_table(HashTable *ht) {
     for (int i = 0; i < TABLE_SIZE; i++) {
         KeyNode *keyNode = ht->table[i];
+        pthread_rwlock_destroy(&ht->locks[i]);
         while (keyNode != NULL) {
             KeyNode *temp = keyNode;
             keyNode = keyNode->next;

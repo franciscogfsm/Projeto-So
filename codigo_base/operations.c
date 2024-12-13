@@ -185,27 +185,48 @@ void format_Char(char *backup_filename, size_t size, const char *full_path, cons
 }
 
 int kvs_backup(const char *full_path, const char *buffer, int file_bcks) {
+    char backup_filename[256];
+    format_Char(backup_filename, sizeof(backup_filename), full_path, buffer, file_bcks);
+    int fd = open(backup_filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd == -1) {
+        perror("open");
+        return -1;
+    }
     pid_t pid = fork();
     if (pid == 0) {
         // Child process
-        char backup_filename[256];
-        format_Char(backup_filename, sizeof(backup_filename), full_path, buffer, file_bcks);
-        int fd = open(backup_filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (fd == -1) {
-            perror("open");
-            return -1;
-        }
         global_line_locker();
-        kvs_show(fd);
+        for (int i = 0; i < TABLE_SIZE; i++) {
+            KeyNode *keyNode = kvs_table->table[i];
+            while (keyNode != NULL) {
+                const char *key = keyNode->key;
+                const char *value = keyNode->value;
+                const char *prefix = "(";
+                const char *separator = ", ";
+                const char *suffix = ")\n";
+
+                // Write key
+                write(fd, prefix, 1);
+                write(fd, key, strlen(key));
+                write(fd, separator, 2);
+                write(fd, value, strlen(value));
+                write(fd, suffix, 2);
+
+                keyNode = keyNode->next;
+            }
+        }
         global_line_unlocker();
         close(fd);
         _exit(0);
     } else if (pid > 0) {
         // Parent process
+        close(fd);
         return 0;
     } else {
         // Fork failed
         perror("fork");
+        close(fd);
+        unlink(backup_filename);
         return -1;
     }
 }
