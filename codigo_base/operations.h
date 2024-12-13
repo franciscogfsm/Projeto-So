@@ -50,9 +50,11 @@ void kvs_wait_backup();
 void kvs_wait(unsigned int delay_ms);
 
 
-void line_locker(size_t num_pairs,char keys[][MAX_STRING_SIZE]);
+void line_locker(size_t num_pairs,char keys[][MAX_STRING_SIZE],int write);
 void line_unlocker(size_t num_pairs,char keys[][MAX_STRING_SIZE]);
 int compare_keys(const void *a, const void *b);
+void global_line_locker();
+void global_line_unlocker();
 
 
 #endif  // KVS_OPERATIONS_H
