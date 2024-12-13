@@ -11,10 +11,6 @@
 #include <sys/wait.h>
 #include <pthread.h>
 
-///home/kali/Desktop/Projeto-So/tests-public/jobs 2
-///home/kali/Desktop/Projeto-So/codigo_base/tests-public/jobs 2
-///home/kali/Desktop/Projeto-So/jobs/ 2
-
 typedef struct {
     char **Job_paths;
     int num_jobs;
@@ -46,7 +42,7 @@ void *job_working(void *args){
         (*(j_args->current_job))++;
         pthread_mutex_unlock(j_args->mutex_jobs);
         
-        int Number_bck_file=0;
+        int Number_bck_file=1;
         char keys[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
         char values[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
         unsigned int delay;
@@ -141,15 +137,16 @@ void *job_working(void *args){
                     break;
 
                 case CMD_BACKUP:
-                    pthread_rwlock_rdlock(j_args->table_lock);
                     (*(j_args->active_backups))++;
                     if (*(j_args -> active_backups) > j_args -> MAX_BACKUPS){
                         wait(NULL);
                         (*(j_args->active_backups))--;
                     }
-                    Number_bck_file++;
+                    pthread_rwlock_rdlock(j_args->table_lock);
                     if (kvs_backup(j_args -> Job_paths[job_index], j_args -> buffer, Number_bck_file)) {
                         fprintf(stderr, "Failed to perform backup.\n");
+                    } else{
+                        Number_bck_file++;
                     }
                     pthread_rwlock_unlock(j_args->table_lock);
                     break;
@@ -166,7 +163,7 @@ void *job_working(void *args){
                         "  DELETE [key,key2,...]\n"
                         "  SHOW\n"
                         "  WAIT <delay_ms>\n"
-                        "  BACKUP\n" // Not implemented
+                        "  BACKUP\n"
                         "  HELP\n"
                     );
                     break;
@@ -186,8 +183,6 @@ void *job_working(void *args){
 
     return NULL;
 }
-
-
 
 
 
@@ -245,7 +240,6 @@ int main(int argc, char *argv[]) {
     };
     
     
-    
     for (int i = 0; i < MAX_THREADS; i++) {
         int ret = pthread_create(&threads[i], NULL, job_working, &args);
         if (ret != 0) {
@@ -264,6 +258,5 @@ int main(int argc, char *argv[]) {
     free_job_paths(Job_paths, num_jobs);
     kvs_terminate();
     pthread_rwlock_destroy(&table_lock);
-    printf("Finished Sucess\n");
     return 0;
 }

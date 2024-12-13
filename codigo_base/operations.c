@@ -195,9 +195,11 @@ int kvs_backup(const char *full_path, const char *buffer, int file_bcks) {
             perror("open");
             return -1;
         }
+        global_line_locker();
         kvs_show(fd);
+        global_line_unlocker();
         close(fd);
-        exit(0);
+        _exit(0);
     } else if (pid > 0) {
         // Parent process
         return 0;
