@@ -46,12 +46,29 @@ size_t parse_read_delete(int fd, char keys[][MAX_STRING_SIZE], size_t max_keys, 
 /// @return 0 if no thread was specified, 1 if a thread was specified, -1 on error.
 int parse_wait(int fd, unsigned int *delay, unsigned int *thread_id);
 
-
-
-
+/// Compares two job paths.
+/// @param a Pointer to the first job path.
+/// @param b Pointer to the second job path.
+/// @return An integer less than, equal to, or greater than zero if the first argument 
+/// is considered to be respectively less than, equal to, or greater than the second.
 int compare_job_paths(const void *a, const void *b);
+
+///Frees the memory allocated for job paths.
+/// @param Job_paths Array of job paths to be freed.
+/// @param num_jobs Number of job paths in the array.
 void free_job_paths(char **Job_paths, int num_jobs);
+
+
+/// Finds all job files in a directory.
+/// @param dir Pointer to the directory to search.
+/// @param buffer Path to the directory.
+/// @param num_jobs Pointer to an integer containing the number of jobs in the directory.
+/// @return An array of strings containing the paths to the job files.
 char** find_jobs(DIR *dir, const char *buffer, int *num_jobs);
+
+/// Extracts the file name from a full path.
+/// @param full_path full path to the file.
+/// @return A string containing the file name without path and extension.
 char* get_file_name(const char *full_path);
 
 

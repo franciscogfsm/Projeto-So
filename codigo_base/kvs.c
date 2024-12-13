@@ -26,7 +26,7 @@ struct HashTable* create_hash_table() {
   for (int i = 0; i < TABLE_SIZE; i++) {
     ht->table[i] = NULL;
     if (pthread_rwlock_init(&ht->locks[i], NULL) != 0) {
-      fprintf(stderr, "Failed to initialize rwlock for bucket %d\n", i);
+      fprintf(stderr, "Failed to initialize rwlock %d\n", i);
       for (int j = 0; j < i; j++) {
         pthread_rwlock_destroy(&ht->locks[j]);
       }
