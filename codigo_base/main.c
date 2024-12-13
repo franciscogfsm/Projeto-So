@@ -220,7 +220,6 @@ int main(int argc, char *argv[]) {
     }
 
 
-
     pthread_rwlock_t table_lock;
     pthread_rwlock_init(&table_lock, NULL);
     pthread_mutex_t mutex_jobs;

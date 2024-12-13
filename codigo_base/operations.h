@@ -49,19 +49,30 @@ void kvs_wait_backup();
 /// @param delay_us Delay in milliseconds.
 void kvs_wait(unsigned int delay_ms);
 
-///
+/// Locks specific lines in the hash table based on the provided keys. It can 
+/// read or write lock based on the write parameter.
+/// @param num_pairs Number of key-value pairs.
+/// @param keys Array of keys for which to acquire locks.
+/// @param write if 1 acquires write locks; otherwise, acquires read locks.
 void line_locker(size_t num_pairs,char keys[][MAX_STRING_SIZE],int write);
 
-///
+/// Releases locks specific lines in the hash table based on the provided keys. It can
+/// read or write lock based on the write parameter.
+/// @param num_pairs Number of key-value pairs.
+/// @param keys Array of keys for which to release locks.
 void line_unlocker(size_t num_pairs,char keys[][MAX_STRING_SIZE]);
 
-///
+///Compares two keys.
+/// @param a Pointer to the first key.
+/// @param b Pointer to the second key.
+/// @return An integer less than, equal to, or greater than zero if the first argument 
+/// is considered to be respectively less than, equal to, or greater than the second.
 int compare_keys(const void *a, const void *b);
 
-///
+/// Acquires read locks for all lines in the hash table.
 void global_line_locker();
 
-///
+/// Releases all locks for all lines in the hash table.
 void global_line_unlocker();
 
 

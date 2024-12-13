@@ -58,7 +58,6 @@ void global_line_unlocker() {
 }
 
 void line_locker(size_t num_pairs, char keys[][MAX_STRING_SIZE], int write) {
-    qsort(keys, num_pairs, sizeof(keys[0]), compare_keys); 
     bool locked[TABLE_SIZE] = {false}; 
     for (size_t i = 0; i < num_pairs; i++) {
         int index = hash(keys[i]);
@@ -74,7 +73,6 @@ void line_locker(size_t num_pairs, char keys[][MAX_STRING_SIZE], int write) {
 }
 
 void line_unlocker(size_t num_pairs, char keys[][MAX_STRING_SIZE]) {
-    qsort(keys, num_pairs, sizeof(keys[0]), compare_keys); 
     bool unlocked[TABLE_SIZE] = {false}; 
 
     for (size_t i = 0; i < num_pairs; i++) {
