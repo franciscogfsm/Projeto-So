@@ -21,7 +21,7 @@ typedef struct {
     const char *buffer;
     int MAX_BACKUPS;
     pthread_mutex_t *mutex_jobs;
-    pthread_mutex_t *mutex_hashtable;
+    pthread_rwlock_t *table_lock;
     int *current_job;
     int *active_backups;
 } thread_args_t;
@@ -35,16 +35,17 @@ void *job_working(void *args){
         int job_index;
 
         //Mutex lock for avoiding threads entering the same job
+        // Lock para obter um job
+        // Bloqueio para acessar e atualizar o índice do job
         pthread_mutex_lock(j_args->mutex_jobs);
-        if (*j_args -> current_job >= j_args -> num_jobs){
+        if (*(j_args->current_job) >= j_args->num_jobs) {
             pthread_mutex_unlock(j_args->mutex_jobs);
-            break;
+            break; 
         }
-        job_index = *(j_args -> current_job);
+        job_index = *(j_args->current_job);
         (*(j_args->current_job))++;
-        pthread_mutex_unlock(j_args -> mutex_jobs);
-
-        //While cycle here
+        pthread_mutex_unlock(j_args->mutex_jobs);
+        
         int Number_bck_file=0;
         char keys[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
         char values[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
@@ -74,12 +75,14 @@ void *job_working(void *args){
             }
             switch (cmd) {
                 case CMD_WRITE:
+                    pthread_rwlock_wrlock(j_args->table_lock);
                     num_pairs = parse_write(fd, keys, values, MAX_WRITE_SIZE, MAX_STRING_SIZE);
                     if (num_pairs == 0) {
+                        pthread_rwlock_unlock(j_args->table_lock);
                         continue;
                     }
-                    line_locker(num_pairs, keys);
-                    
+                    line_locker(num_pairs, keys,1);
+                    pthread_rwlock_unlock(j_args->table_lock);
                     if (kvs_write(num_pairs, keys, values)) {
                         fprintf(stderr, "Failed to write pair\n");
                     }
@@ -87,12 +90,15 @@ void *job_working(void *args){
                     break;
 
                 case CMD_READ:
+                    pthread_rwlock_rdlock(j_args->table_lock); 
                     num_pairs = parse_read_delete(fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
                     if (num_pairs == 0) {
+                        pthread_rwlock_unlock(j_args->table_lock);
                         fprintf(stderr, "Invalid command. See HELP for usage\n");
                         continue;
                     }
-                    line_locker(num_pairs, keys);
+                    line_locker(num_pairs, keys,0);
+                    pthread_rwlock_unlock(j_args->table_lock);
                     if (kvs_read(num_pairs,keys,fd_out)) {
                         fprintf(stderr, "Failed to read pair\n");
                     }
@@ -100,12 +106,15 @@ void *job_working(void *args){
                     break;                            
 
                 case CMD_DELETE:
+                    pthread_rwlock_wrlock(j_args->table_lock);
                     num_pairs = parse_read_delete(fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
                     if (num_pairs == 0) {
+                        pthread_rwlock_unlock(j_args->table_lock);
                         fprintf(stderr, "Invalid command. See HELP for usage\n");
                         continue;
                     }
-                    line_locker(num_pairs, keys);
+                    line_locker(num_pairs, keys,1);
+                    pthread_rwlock_unlock(j_args->table_lock);
                     if (kvs_delete(num_pairs, keys,fd_out)) {
                         fprintf(stderr, "Failed to delete pair\n");
                     }
@@ -113,9 +122,11 @@ void *job_working(void *args){
                     break;
 
                 case CMD_SHOW:
-                    pthread_mutex_lock(j_args -> mutex_hashtable);
+                    pthread_rwlock_rdlock(j_args->table_lock);
+                    global_line_locker();
+                    pthread_rwlock_unlock(j_args->table_lock);
                     kvs_show(fd_out);
-                    pthread_mutex_unlock(j_args -> mutex_hashtable);
+                    global_line_unlocker();
                     break;
 
                 case CMD_WAIT:
@@ -130,7 +141,7 @@ void *job_working(void *args){
                     break;
 
                 case CMD_BACKUP:
-                    pthread_mutex_lock(j_args -> mutex_hashtable);
+                    pthread_rwlock_rdlock(j_args->table_lock);
                     (*(j_args->active_backups))++;
                     if (*(j_args -> active_backups) > j_args -> MAX_BACKUPS){
                         wait(NULL);
@@ -140,7 +151,7 @@ void *job_working(void *args){
                     if (kvs_backup(j_args -> Job_paths[job_index], j_args -> buffer, Number_bck_file)) {
                         fprintf(stderr, "Failed to perform backup.\n");
                     }
-                    pthread_mutex_unlock(j_args -> mutex_hashtable);
+                    pthread_rwlock_unlock(j_args->table_lock);
                     break;
 
                 case CMD_INVALID:
@@ -196,6 +207,7 @@ int main(int argc, char *argv[]) {
     const char *buffer = argv[1];
     int MAX_BACKUPS = atoi(argv[2]);
     int MAX_THREADS = atoi(argv[3]);
+    
 
     DIR *dir = opendir(buffer);
     if (dir == NULL) {
@@ -208,11 +220,16 @@ int main(int argc, char *argv[]) {
     if (Job_paths == NULL) {
         return 1;
     }
-    
-    
+    if (MAX_THREADS> num_jobs){
+        MAX_THREADS = num_jobs;
+    }
+
+
+
+    pthread_rwlock_t table_lock;
+    pthread_rwlock_init(&table_lock, NULL);
 
     pthread_mutex_t mutex_jobs = PTHREAD_MUTEX_INITIALIZER;
-    pthread_mutex_t mutex_hashtable = PTHREAD_MUTEX_INITIALIZER;
     int current_job = 0;
     int active_backups = 0;
     pthread_t threads[MAX_THREADS];
@@ -221,15 +238,13 @@ int main(int argc, char *argv[]) {
         .num_jobs = num_jobs,
         .buffer = buffer,
         .MAX_BACKUPS = MAX_BACKUPS,
+        .table_lock = &table_lock,
         .mutex_jobs = &mutex_jobs,
-        .mutex_hashtable = &mutex_hashtable,
         .current_job = &current_job,
         .active_backups = &active_backups
     };
     
-    if (MAX_THREADS> num_jobs){
-        MAX_THREADS = num_jobs;
-    }
+    
     
     for (int i = 0; i < MAX_THREADS; i++) {
         int ret = pthread_create(&threads[i], NULL, job_working, &args);
@@ -248,6 +263,7 @@ int main(int argc, char *argv[]) {
     closedir(dir);
     free_job_paths(Job_paths, num_jobs);
     kvs_terminate();
+    pthread_rwlock_destroy(&table_lock);
     printf("Finished Sucess\n");
     return 0;
 }
