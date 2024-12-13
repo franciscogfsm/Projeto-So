@@ -24,6 +24,7 @@ struct HashTable* create_hash_table() {
   if (!ht) return NULL;
   for (int i = 0; i < TABLE_SIZE; i++) {
       ht->table[i] = NULL;
+      pthread_rwlock_init(&ht->locks[i], NULL);
   }
   return ht;
 }
