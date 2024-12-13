@@ -22,7 +22,9 @@ typedef struct {
     int *active_backups;
 } thread_args_t;
 
-
+/// Function executed by the threads to process job files.
+/// @param args Pointer to a thread_args_t structure
+/// @return NULL when the thread completes its work.
 void *job_working(void *args){
     thread_args_t *j_args = (thread_args_t *)args;
 
