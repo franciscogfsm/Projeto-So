@@ -7,6 +7,7 @@
 #include "constants.h"
 #include <fcntl.h>
 #include "parser.h"
+#include <stdbool.h>
 
 static struct HashTable* kvs_table = NULL;
 
@@ -37,19 +38,52 @@ int kvs_terminate() {
   free_table(kvs_table);
   return 0;
 }
+int compare_keys(const void *a, const void *b) {
+    const char *key_a = (const char *)a;
+    const char *key_b = (const char *)b;
+    return strcmp(key_a, key_b);
+}
 
 
-void line_locker(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
-  for (size_t i = 0; i < num_pairs; i++) {
-    int index = hash(keys[i]);
-    pthread_mutex_lock(&kvs_table->locks[index]);
+void global_line_locker() {
+    for (size_t i = 0; i < TABLE_SIZE; i++) {
+        pthread_rwlock_rdlock(&kvs_table->locks[i]); // Acquire read lock
+    }
+}
+
+void global_line_unlocker() {
+  for (size_t i = 0; i < TABLE_SIZE; i++) {
+    pthread_rwlock_unlock(&kvs_table->locks[i]); // Release lock
   }
 }
-void line_unlocker(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
-  for (size_t i = 0; i < num_pairs; i++) {
-    int index = hash(keys[i]);
-    pthread_mutex_unlock(&kvs_table->locks[index]);
-  }
+
+void line_locker(size_t num_pairs, char keys[][MAX_STRING_SIZE], int write) {
+    qsort(keys, num_pairs, sizeof(keys[0]), compare_keys); 
+    bool locked[TABLE_SIZE] = {false}; 
+    for (size_t i = 0; i < num_pairs; i++) {
+        int index = hash(keys[i]);
+        if (!locked[index]) { 
+            if (write) {
+                pthread_rwlock_wrlock(&kvs_table->locks[index]);
+            } else {
+                pthread_rwlock_rdlock(&kvs_table->locks[index]);
+            }
+            locked[index] = true; 
+        }
+    }
+}
+
+void line_unlocker(size_t num_pairs, char keys[][MAX_STRING_SIZE]) {
+    qsort(keys, num_pairs, sizeof(keys[0]), compare_keys); 
+    bool unlocked[TABLE_SIZE] = {false}; 
+
+    for (size_t i = 0; i < num_pairs; i++) {
+        int index = hash(keys[i]);
+        if (!unlocked[index]) { 
+            pthread_rwlock_unlock(&kvs_table->locks[index]);
+            unlocked[index] = true; 
+        }
+    }
 }
 
 
@@ -59,21 +93,15 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE], char values[][MAX_
     fprintf(stderr, "KVS state must be initialized\n");
     return 1;
   }
-
   for (size_t i = 0; i < num_pairs; i++) {
     if (write_pair(kvs_table, keys[i], values[i]) != 0) {
       fprintf(stderr, "Failed to write keypair (%s,%s)\n", keys[i], values[i]);
     }
   }
-
   return 0;
 }
 
-int compare_keys(const void *a, const void *b) {
-    const char *key_a = (const char *)a;
-    const char *key_b = (const char *)b;
-    return strcmp(key_a, key_b);
-}
+
 
 int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd_out) {
   if (kvs_table == NULL) {
