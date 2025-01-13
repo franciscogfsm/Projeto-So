@@ -92,19 +92,10 @@ int queue_enqueue(Queue *queue, int client_fd);
 /// @return 0 if a client was dequeued successfully, 1 otherwise.
 int queue_dequeue(Queue *queue, int *client_fd);
 
-/// Checks if the queue is empty.
-/// @param queue Pointer to the queue.
-/// @return 1 if the queue is empty, 0 otherwise.
-int queue_is_empty(Queue *queue);
-
-/// Checks if the queue is full.
-/// @param queue Pointer to the queue.
-/// @return 1 if the queue is full, 0 otherwise.
-int queue_is_full(Queue *queue);
-
 /// Destroys the queue, freeing any allocated memory.
 /// @param queue Pointer to the queue.
 void queue_destroy(Queue *queue);
+
 
 
 

@@ -6,7 +6,7 @@ SHOW
 BACKUP
 READ [c]
 DELETE [c]
-WRITE [(a,l)(b,bruv)]
+WRITE [(a,l)(a,l)]
 WAIT 20000
 WRITE [(a,l)(b,bruv)]
 DELETE [a]

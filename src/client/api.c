@@ -41,104 +41,111 @@ void cleanup_pipes() {
 
 
 void print_server_response(int server_response, const char *operation) {
-    printf("Server returned %d for operation: %s\n", server_response, operation);
+  printf("Server returned %d for operation: %s\n", server_response, operation);
 }
 
 void handle_response(int mode, int server_response) {
-    switch (mode) {
-        case OP_CODE_CONNECT:
-            print_server_response(server_response, "connect");
-            break;
-        case OP_CODE_DISCONNECT:
-            print_server_response(server_response, "disconnect");
-            break;
-        case OP_CODE_SUBSCRIBE:
-            print_server_response(server_response, "subscribe");
-            break;
-        case OP_CODE_UNSUBSCRIBE:
-            print_server_response(server_response, "unsubscribe");
-            break;
-        default:
-            printf("Unknown operation mode: %d\n", mode);
-            break;
-    }
+  switch (mode) {
+    case OP_CODE_CONNECT:
+      print_server_response(server_response, "connect");
+      break;
+    case OP_CODE_DISCONNECT:
+      print_server_response(server_response, "disconnect");
+      break;
+    case OP_CODE_SUBSCRIBE:
+      print_server_response(server_response, "subscribe");
+      break;
+    case OP_CODE_UNSUBSCRIBE:
+      print_server_response(server_response, "unsubscribe");
+      break;
+    default:
+      printf("Unknown operation mode: %d\n", mode);
+      break;
+  }
 }
 
 int send_message(int mode, const char *key, bool use_req_fd) {
     int pipe_fd;
 
     if (use_req_fd) {
-        pipe_fd = req_fd;
+      pipe_fd = req_fd;
     } else {
-        pipe_fd = server_fd;
+      pipe_fd = server_fd;
     }
 
     if (pipe_fd < 0) {
-        fprintf(stderr, "Invalid pipe descriptor\n");
-        return 1;
+      fprintf(stderr, "Invalid pipe descriptor\n");
+      return 1;
     }
 
     struct {
-        char opcode;
-        union {
-            struct {
-                char req_pipe[40];
-                char resp_pipe[40];
-                char notif_pipe[40];
-            } connect;
-            char key[40]; 
-        } data;
+      char opcode;
+      union {
+        struct {
+          char req_pipe[40];
+          char resp_pipe[40];
+          char notif_pipe[40];
+        } connect;
+        char key[40]; 
+      } data;
     } message;
 
     size_t message_size;
 
     // Handle different modes
     if (mode == OP_CODE_CONNECT || mode == OP_CODE_DISCONNECT) {
-        // Connect or Disconnect Message
-        message.opcode = mode;
-        strncpy(message.data.connect.req_pipe, req_pipe_path, sizeof(message.data.connect.req_pipe));
-        strncpy(message.data.connect.resp_pipe, resp_pipe_path, sizeof(message.data.connect.resp_pipe));
-        strncpy(message.data.connect.notif_pipe, notif_pipe_path, sizeof(message.data.connect.notif_pipe));
-        message_size = sizeof(message);
+      // Connect or Disconnect Message
+      message.opcode = mode;
+      strncpy(message.data.connect.req_pipe, req_pipe_path, 
+          sizeof(message.data.connect.req_pipe));
+      strncpy(message.data.connect.resp_pipe, resp_pipe_path, 
+          sizeof(message.data.connect.resp_pipe));
+      strncpy(message.data.connect.notif_pipe, notif_pipe_path, 
+          sizeof(message.data.connect.notif_pipe));
+      message_size = sizeof(message);
     } else if (mode == OP_CODE_SUBSCRIBE || mode == OP_CODE_UNSUBSCRIBE) {
-        // Subscribe or Unsubscribe Message
-        message.opcode = mode;
-        strncpy(message.data.connect.req_pipe, req_pipe_path, sizeof(message.data.connect.req_pipe));
-        strncpy(message.data.connect.resp_pipe, resp_pipe_path, sizeof(message.data.connect.resp_pipe));
-        strncpy(message.data.connect.notif_pipe, notif_pipe_path, sizeof(message.data.connect.notif_pipe));
-        if (key == NULL || strlen(key) >= sizeof(message.data.key)) {
-            fprintf(stderr, "Invalid or missing key\n");
-            return 1;
-        }
-        strncpy(message.data.key, key, sizeof(message.data.key));
-        message_size = sizeof(message);
+      // Subscribe or Unsubscribe Message
+      message.opcode = mode;
+      strncpy(message.data.connect.req_pipe, req_pipe_path, 
+          sizeof(message.data.connect.req_pipe));
+      strncpy(message.data.connect.resp_pipe, resp_pipe_path, 
+          sizeof(message.data.connect.resp_pipe));
+      strncpy(message.data.connect.notif_pipe, notif_pipe_path, 
+          sizeof(message.data.connect.notif_pipe));
+      if (key == NULL || strlen(key) >= sizeof(message.data.key)) {
+          fprintf(stderr, "Invalid or missing key\n");
+          return 1;
+      }
+      strncpy(message.data.key, key, sizeof(message.data.key));
+      message_size = sizeof(message);
     } else {
-        fprintf(stderr, "Invalid operation code\n");
-        return 1;
+      fprintf(stderr, "Invalid operation code\n");
+      return 1;
     }
 
     // Write the message to the selected pipe
     if (write(pipe_fd, &message, message_size) != (ssize_t)message_size) {
-        fprintf(stderr, "Failed to send message\n");
-        return 1;
+      fprintf(stderr, "Failed to send message\n");
+      return 1;
     }
 
     // Read the response from the server
     int server_response;
-    ssize_t bytes_read = read(res_fd, &server_response, sizeof(server_response));
+    ssize_t bytes_read = read(res_fd, &server_response, 
+      sizeof(server_response));
     if (bytes_read <= 0) {
-        if (bytes_read == -1) {
-            fprintf(stderr, "Failed to read server response\n");
-        } else {
-            fprintf(stderr, "Server closed the connection\n");
-        }
-        return 1;
+      if (bytes_read == -1) {
+        fprintf(stderr, "Failed to read server response\n");
+      } else {
+        fprintf(stderr, "Server closed the connection\n");
+      }
+      return 1;
     }
 
     handle_response(mode, server_response);
 
     if (server_response != 0) {
-        return 1;
+      return 1;
     }
 
     return 0;
@@ -174,7 +181,7 @@ int open_pipes(){
 
 
 int kvs_connect(char const *req_pipe_path_arg, char const *resp_pipe_path_arg,
-                char const *server_pipe_path_arg, char const *notif_pipe_path_arg) {
+            char const *server_pipe_path_arg, char const *notif_pipe_path_arg) {
   
 
   strncpy(req_pipe_path, req_pipe_path_arg, sizeof(req_pipe_path) - 1);

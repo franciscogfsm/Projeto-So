@@ -18,6 +18,7 @@
 static pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER; // Protects the queue
 static pthread_cond_t queue_not_empty = PTHREAD_COND_INITIALIZER;
 
+pthread_mutex_t notif_pipe_mutex = PTHREAD_MUTEX_INITIALIZER;
 ClientTable *subscription_table = NULL; 
 // Create ClientTable
 ClientTable *create_client_table() {
@@ -38,13 +39,14 @@ ClientTable *create_client_table() {
 unsigned int hash_function(const char *key) {
     unsigned int hash = 0;
     while (*key) {
-        hash = (hash * 31) + *key++;
+        hash = (hash * 31) + (unsigned int)*key++;
     }
     return hash % TABLE_SIZE;
 }
 
 // Add a subscription
-int add_subscription(ClientTable *table, const char *key, int client_fd, const char *notif_pipe) {
+int add_subscription(ClientTable *table, const char *key, int client_fd, 
+                     const char *notif_pipe) {
     unsigned int index = hash_function(key);
 
     pthread_rwlock_wrlock(&table->lock);
@@ -232,7 +234,8 @@ int remove_client(ClientTable *table, int client_fd) {
 
 static struct HashTable *kvs_table = NULL;
 // Subscribe client
-int subscribe_client(ClientTable *table, int client_fd, const char *key, const char *notif_pipe) {
+int subscribe_client(ClientTable *table, int client_fd, const char *key, 
+                     const char *notif_pipe) {
     if (!key_exists(kvs_table, key)){
       return 1;
     }
@@ -242,7 +245,8 @@ int subscribe_client(ClientTable *table, int client_fd, const char *key, const c
     }
 
     if (add_subscription(table, key, client_fd, notif_pipe) != 0) {
-        fprintf(stderr, "Failed to subscribe client_fd %d to key %s\n", client_fd, key);
+        fprintf(stderr, "Failed to subscribe client_fd %d to key %s\n", 
+            client_fd, key);
         return 1;
     }
     return 0;
@@ -271,7 +275,7 @@ int unsubscribe_client(ClientTable *table, int client_fd, const char *key) {
 
 void print_hash_table(ClientTable *table) {
     if (!table) {
-        printf("Hash table is NULL\n");
+        perror("Hash table is NULL\n");
         return;
     }
 
@@ -359,7 +363,7 @@ void subscribed_keys(const char *key,const char *value, int opcode) {
             found=1;
             ClientNode *client = current->clients;
             while (client) {
-                notify_client(client->client_fd, client->notif_pipe, key,value,opcode);
+                notify_client(client->notif_pipe, key,value,opcode);
                 client = client->next;
             }
             break; // Key found
@@ -374,7 +378,7 @@ void subscribed_keys(const char *key,const char *value, int opcode) {
 
 
 
-void notify_client(int client_fd, const char *notif_pipe, const char *key, const char *value, int opcode) {
+void notify_client(const char *notif_pipe, const char *key, const char *value, int opcode) {
     struct {
         int opcode;
         char key[MAX_STRING_SIZE];
@@ -387,7 +391,7 @@ void notify_client(int client_fd, const char *notif_pipe, const char *key, const
       strncpy(message.value, value, MAX_STRING_SIZE);
     }
     
-
+    pthread_mutex_lock(&notif_pipe_mutex);
 
     int notif_fd = open(notif_pipe, O_WRONLY);
     if (notif_fd == -1) {
@@ -401,7 +405,35 @@ void notify_client(int client_fd, const char *notif_pipe, const char *key, const
     }
 
     close(notif_fd);
+    pthread_mutex_unlock(&notif_pipe_mutex);
 }
+
+//void cleanup_and_disconnect_clients() {
+//    pthread_rwlock_wrlock(&subscription_table->lock);
+//
+//    for (int i = 0; i < TABLE_SIZE; i++) {
+//        SubscriptionNode *current = subscription_table->table[i];
+//        while (current) {
+//            SubscriptionNode *to_free = current;
+//            current = current->next;
+//
+//            ClientNode *client = to_free->clients;
+//            while (client) {
+//                int notif_fd = open(client->notif_pipe, O_WRONLY);
+//                if (notif_fd != -1) {
+//                    close(notif_fd);
+//                }
+//                close(client->client_fd);
+//                ClientNode *client_to_free = client;
+//                client = client->next;
+//                free(client_to_free);
+//            }
+//            free(to_free);
+//        }
+//        subscription_table->table[i] = NULL;
+//    }
+//    pthread_rwlock_unlock(&subscription_table->lock);
+//}
 
 
 
@@ -640,20 +672,6 @@ int queue_dequeue(Queue *queue, int *client_fd) {
 
     pthread_mutex_unlock(&queue_mutex);
     return 0;
-}
-
-int queue_is_empty(Queue *queue) {
-    pthread_mutex_lock(&queue_mutex);
-    int is_empty = (queue->size == 0);
-    pthread_mutex_unlock(&queue_mutex);
-    return is_empty;
-}
-
-int queue_is_full(Queue *queue) {
-    pthread_mutex_lock(&queue_mutex);
-    int is_full = (queue->size == queue->capacity);
-    pthread_mutex_unlock(&queue_mutex);
-    return is_full;
 }
 
 void queue_destroy(Queue *queue) {

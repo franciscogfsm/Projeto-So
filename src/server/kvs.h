@@ -78,16 +78,19 @@ bool key_exists(HashTable *ht, const char *key);
 ClientTable *create_client_table();
 void free_client_table(ClientTable *table);
 unsigned int hash_function(const char *key);
-int add_subscription(ClientTable *table, const char *key, int client_fd, const char *notif_pipe);
+int add_subscription(ClientTable *table, const char *key, int client_fd, 
+  const char *notif_pipe);
 int remove_subscription(ClientTable *table, const char *key, int client_fd);
-int subscribe_client(ClientTable *table, int client_fd, const char *key, const char *notif_pipe);
+int subscribe_client(ClientTable *table, int client_fd, const char *key, 
+  const char *notif_pipe);
 int subscription_table_init();
 void subscription_table_destroy();
 int remove_client(ClientTable *table, int client_fd);
 int unsubscribe_client(ClientTable *table, int client_fd, const char *key);
 void print_hash_table(ClientTable *table);
 void subscribed_keys(const char *key,const char *value, int opcode);
-void notify_client(int client_fd, const char *notif_pipe, const char *key, const char *value, int opcode);
+void notify_client(const char *notif_pipe, const char *key, const char *value, 
+  int opcode);
 int delete_key(ClientTable *table, const char *key);
 
 

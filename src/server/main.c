@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include "kvs.h"
 #include <semaphore.h>
+#include <signal.h>
 
 
 
@@ -29,6 +30,12 @@ struct SharedData {
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t n_current_backups_lock = PTHREAD_MUTEX_INITIALIZER;
 
+
+sigset_t set;
+volatile sig_atomic_t sigusr1_received = 0;
+
+int clients[MANAGING_THREADS];
+
 size_t active_backups = 0; // Number of active backups
 size_t max_backups;        // Maximum allowed simultaneous backups
 size_t max_threads;        // Maximum allowed simultaneous threads
@@ -37,6 +44,15 @@ char *jobs_directory = NULL;
 
 sem_t empty_slots; 
 sem_t filled_slots;
+
+Queue client_queue;
+
+
+void handle_sigusr1(int sig) {
+  if (sig == SIGUSR1){
+    sigusr1_received = 1;
+  }
+}
 
 
 int filter_job_files(const struct dirent *entry) {
@@ -71,6 +87,13 @@ static int entry_files(const char *dir, struct dirent *entry, char *in_path,
 }
 
 static int run_job(int in_fd, int out_fd, char *filename) {
+
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+  if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0){
+    perror("sigmask\n");
+  }
+
   size_t file_backups = 0;
   while (1) {
     char keys[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
@@ -256,9 +279,6 @@ static void *get_file(void *arguments) {
 
 
 
-
-Queue client_queue;
-
 void process_client_commands(int client_fd) {
   struct {
     char opcode;
@@ -309,14 +329,17 @@ void process_client_commands(int client_fd) {
       case OP_CODE_UNSUBSCRIBE:
         resp_fd = open(message.data.connect.resp_pipe, O_WRONLY);
         if (resp_fd == -1) {
-          fprintf(stderr, "Failed to open client response pipe for unsubscribe acknowledgment");
+          fprintf(stderr, 
+          "Failed to open client response pipe for unsubscribe acknowledgment");
         } else {
           int success = 0;
-          if (unsubscribe_client(subscription_table, client_fd, message.data.key) != 0){
+          if (unsubscribe_client(subscription_table, client_fd, 
+                                  message.data.key) != 0){
             success = 1;
           }
           if (write(resp_fd, &success, sizeof(success)) == -1) {
-            fprintf(stderr, "Failed to write unsubscribe acknowledgment to client");
+            fprintf(stderr, 
+            "Failed to write unsubscribe acknowledgment to client");
           }
           print_hash_table(subscription_table);
           close(resp_fd);
@@ -326,17 +349,18 @@ void process_client_commands(int client_fd) {
       case OP_CODE_DISCONNECT:
         resp_fd = open(message.data.connect.resp_pipe, O_WRONLY);
         if (resp_fd == -1) {
-          fprintf(stderr, "Failed to open client response pipe for disconnect acknowledgment");
+          fprintf(stderr, 
+          "Failed to open client response pipe for disconnect acknowledgment");
         } else {
           char success = 0; // Indicate successful disconnection
           
           if (write(resp_fd, &success, sizeof(success)) == -1) {
-            fprintf(stderr, "Failed to write disconnection acknowledgment to client");
+            fprintf(stderr, 
+            "Failed to write disconnection acknowledgment to client");
           }
           close(resp_fd);
         }
         remove_client(subscription_table,client_fd);//Remover cliente da hashtable de clientes
-        printf("Client disconnected: %d\n",client_fd);
         close(client_fd);
         return;
       default:
@@ -345,7 +369,37 @@ void process_client_commands(int client_fd) {
     }
   }
 }
+
+//void add_client(int client_fd){
+//  for (int i = 0; i < MANAGING_THREADS; i++){
+//    if (clients[i] = 0)
+//      clients[i] = client_fd;
+//  }
+//}
+
+//void del_client(int client_fd){
+//  for (int i = 0; i < MANAGING_THREADS; i++){
+//    if (clients[i] = client_fd)
+//      clients[i] = 0;
+//  }
+//}
+
+void cleanup_and_disconnect_clients(){
+
+  //for (int i = 0; i < MANAGING_THREADS; i++){
+  //  clients[i] 
+//
+  //}
+}
+
 void *client_handler() {
+
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+  if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0){
+    perror("sigmask\n");
+  }
+
   while (1) {
     int client_fd;
 
@@ -366,11 +420,15 @@ void *client_handler() {
 }
 
 void *init_server_pipes() {
+
   unlink(registration_pipe_name);
-  if (mkfifo(registration_pipe_name, 0666) == -1) {
+  if (mkfifo(registration_pipe_name, 0777) == -1) {
     fprintf(stderr, "Failed to create server registration pipe");
     pthread_exit(NULL);
   }
+
+
+  signal(SIGUSR1, handle_sigusr1);
 
   // Open the FIFO in O_RDWR mode to prevent EOF issues
   int server_fd = open(registration_pipe_name, O_RDONLY);
@@ -380,9 +438,14 @@ void *init_server_pipes() {
     pthread_exit(NULL);
   }
 
-  printf("SERVER LISTENING FOR CONNECTIONS...\n");
-
   while (1) {
+
+    if (sigusr1_received) {
+      //cleanup_and_disconnect_clients();
+      sigusr1_received = 0;
+    }
+
+
     struct {
       char opcode;
       union {

@@ -29,8 +29,8 @@ bool key_exists(HashTable *ht, const char *key) {
     pthread_rwlock_rdlock(&ht->tablelock);
 
     if (ht->table[index] != NULL && strcmp(ht->table[index]->key, key) == 0) {
-        pthread_rwlock_unlock(&ht->tablelock);
-        return true; // Key found
+      pthread_rwlock_unlock(&ht->tablelock);
+      return true; // Key found
     }
 
     pthread_rwlock_unlock(&ht->tablelock);
